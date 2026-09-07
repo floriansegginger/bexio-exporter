@@ -10,6 +10,7 @@ import items from './items.js';
 import projects from './projects.js';
 import tasks from './tasks.js';
 import payroll from './payroll.js';
+import reports from './reports.js';
 
 /** Export order matters: `files` runs before sections that link receipts to documents. */
-export const SECTIONS = [company, reference, contacts, files, sales, purchase, accounting, banking, items, projects, tasks, payroll];
+export const SECTIONS = [company, reference, contacts, files, sales, purchase, accounting, banking, items, projects, tasks, payroll, reports];

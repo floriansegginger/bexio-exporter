@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { runExport, VERSION } from './run.js';
+import { runExport, selectSections, VERSION } from './run.js';
 import { SECTIONS } from './sections/index.js';
 import { BexioClient, BexioError, DEFAULT_BASE_URL } from './client.js';
 import { formatBytes, todayStamp } from './util.js';
@@ -32,6 +32,8 @@ Options:
   -h, --help               Show this help
 
 Re-running with the same --out directory resumes: files that already exist are not fetched again.
+The reports section needs no token: "bexio-export --only reports --out <export dir>" recomputes
+the accounting reports from an existing export.
 `;
 
 const NO_TOKEN = `No bexio token found.
@@ -101,7 +103,17 @@ export async function main(argv) {
     return 0;
   }
 
-  const token = values.token || process.env.BEXIO_TOKEN || loadDotEnv().BEXIO_TOKEN;
+  let selected;
+  try {
+    selected = selectSections({ only: values.only, skip: values.skip });
+  } catch (err) {
+    console.error(err.message);
+    return 1;
+  }
+  const offline = selected.length > 0 && selected.every((s) => s.offline);
+
+  let token = values.token || process.env.BEXIO_TOKEN || loadDotEnv().BEXIO_TOKEN;
+  if (!token && offline) token = 'offline';
   if (!token) {
     console.error(NO_TOKEN);
     return 1;
@@ -111,9 +123,17 @@ export async function main(argv) {
   const log = (message) => console.error(`[${timestamp()}] ${message}`);
   const baseUrl = values['base-url'];
 
+  if (offline) {
+    if (!existsSync(out)) {
+      console.error(`Output directory ${out} does not exist. Offline sections work on an existing export; pass --out <export dir>.`);
+      return 1;
+    }
+    log(`Offline: computing ${selected.map((s) => s.name).join(', ')} from ${path.resolve(out)}`);
+  }
+
   // Preflight: validate the token and show who we are exporting for.
   const probe = new BexioClient({ token, baseUrl, log, maxRetries: 2 });
-  try {
+  if (!offline) try {
     const me = await probe.getJson('/3.0/users/me');
     const profiles = await probe.getJson('/2.0/company_profile').catch(() => null);
     const company = Array.isArray(profiles) && profiles[0]?.name ? ` of "${profiles[0].name}"` : '';

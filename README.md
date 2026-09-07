@@ -3,6 +3,9 @@
 Download everything from a [bexio](https://www.bexio.com) account through the official API
 and keep it in plain, portable formats: JSON for every record, CSV spreadsheets for the
 important tables, PDFs for every sales document, and the original files for every receipt.
+On top of the raw data it produces the accounting reports a fiduciary needs to take over the
+books: bilan, compte de résultat, balance de vérification, feuilles de compte, journal and
+soldes d'ouverture per business year, plus open receivables and import-ready files.
 
 No dependencies. Needs Node.js 22 or newer.
 
@@ -85,8 +88,9 @@ bexio-export-2026-09-07/
 ├── projects/                           projects.json/.csv, per-project milestones and work packages,
 │                                       timesheets.json/.csv, business_activities, ...
 ├── tasks/                              tasks.json/.csv, priorities, statuses
-└── payroll/                            employees, absences per year, paystubs/<year>-<month>.pdf
-                                        (only when the payroll module is licensed)
+├── payroll/                            employees, absences per year, paystubs/<year>-<month>.pdf
+│                                       (only when the payroll module is licensed)
+└── reports/                            accounting reports per business year, see below
 ```
 
 CSV files are UTF-8 with a byte-order mark and open directly in Excel, Numbers or Google
@@ -96,6 +100,67 @@ nothing is lost. The JSON files are the raw API responses and contain everything
 Receipts attached to bills, expenses and manual entries are copied next to the document they
 belong to and also live once in `files/`. `files/index.json` lists for each file which document
 uses it (`_usage`).
+
+## Accounting reports (takeover dossier for an accounting firm)
+
+The `reports` section turns the exported journal into the documents a fiduciary needs to
+take over the books. It runs at the end of every export and can be re-run on its own,
+without a token, on an existing export:
+
+```sh
+npm start -- --only reports --out bexio-export-2026-09-07
+```
+
+Everything lands in `reports/`, in French, as CSV (for import) and HTML (for reading and
+printing to PDF via the browser):
+
+```
+reports/
+├── index.html                      vue d'ensemble: exercices, résultats, débiteurs ouverts
+├── synthese_exercices.csv          chiffres clés par exercice
+├── plan_comptable.csv              plan comptable avec types (actif/passif/produit/charge) et groupes
+├── journal_complet.csv             toutes les écritures: date, pièce, libellé, comptes, CHF, devise, code TVA
+├── debiteurs_ouverts.csv           factures clients non soldées
+├── import/journal_banana.csv       journal avec les colonnes de Banana Comptabilité
+├── import/plan_comptable_banana.csv
+└── exercice_2017-2018/             un dossier par exercice comptable
+    ├── rapport.html                bilan, compte de résultat, balance, feuilles de compte, journal, TVA
+    ├── bilan.csv
+    ├── compte_de_resultat.csv
+    ├── balance_de_verification.csv ouverture, mouvements, soldes par compte
+    ├── soldes_ouverture.csv        soldes à reprendre au premier jour de l'exercice
+    ├── journal.csv
+    ├── grand_livre.csv             toutes les feuilles de compte
+    ├── feuilles_de_compte/         une feuille par compte
+    └── tva.csv                     éléments TVA (indicatif)
+```
+
+How the figures are computed, so that an accountant can check them:
+
+* bexio books each business year as a self-contained window. The year starts with
+  "Report de soldes" entries against the opening account (9100 / 9901) and, when the year is
+  closed, the result is transferred to equity via 9200. Reports are computed per window from
+  those journal entries, so they match what bexio shows. The very first year, which bexio
+  imports through 9901 together with its revenue and expense balances, is handled the same
+  way: its income statement comes from those imported balances.
+* Where bexio never booked a carry-forward (typically the most recent, still open years) the
+  opening balances are computed from the previous closing. Any result not yet transferred is
+  carried into 2979 (bénéfice / perte reporté). Such years are flagged "ouverture calculée"
+  in the reports and in `soldes_ouverture.csv`.
+* The balance sheet always balances by construction: passifs = liabilities and equity +
+  result of the year + balances of the closing accounts (9xxx). A non-zero "écart" would
+  indicate a problem in the source data and is flagged.
+* Journal rows are enriched with the invoice number (from the sales export), the manual
+  entry reference and VAT code (from the manual entries export) and the original currency
+  and rate for foreign-currency bookings. Amounts are in CHF (`base_currency_amount`).
+* VAT: bexio does not expose a VAT code on invoice-generated journal entries, so `tva.csv`
+  is indicative only: VAT account balances, manual entries by code, and invoice VAT totals
+  by rate. Use the filed VAT returns as the reference.
+
+Together with the raw export (invoice PDFs, receipts in `files/`, contacts, bank accounts)
+this is what a fiduciary needs: chart of accounts, complete journal, opening balances at any
+year start, trial balance and financial statements per year, ledgers per account, open
+receivables, and the supporting documents.
 
 ## How it works
 
@@ -125,4 +190,6 @@ npm test
 ```
 
 The tests run the exporter against a small in-process mock of the bexio API
-(`test/mock-server.js`) covering all pagination styles, retries, attachments and resuming.
+(`test/mock-server.js`) covering all pagination styles, retries, attachments and resuming,
+and check the report engine on a synthetic ledger (`test/ledger.test.js`): carry-forwards,
+computed openings, an imported first year, and the balance-sheet identity.

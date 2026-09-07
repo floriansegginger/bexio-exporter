@@ -68,6 +68,10 @@ export class Store {
     await this.#write(rel, buffer);
   }
 
+  async writeText(rel, text) {
+    await this.#write(rel, text);
+  }
+
   async readJson(rel) {
     return JSON.parse(await fs.readFile(this.abs(rel), 'utf8'));
   }

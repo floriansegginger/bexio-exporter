@@ -58,7 +58,7 @@ export default {
 
             if (type.reminders) {
               const reminders = await fetchOrRead(ctx, `${dir}/reminders.json`, async () => {
-                const data = await client.getJson(`/2.0/kb_invoice/${item.id}/kb_reminder`, undefined, { allow: [404] });
+                const data = await client.getJson(`/2.0/kb_invoice/${item.id}/kb_reminder`, undefined, { allow: [404, 422] });
                 return Array.isArray(data) ? data : [];
               });
               for (const r of reminders ?? []) {

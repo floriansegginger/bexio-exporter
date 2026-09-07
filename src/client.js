@@ -15,6 +15,7 @@ export class BexioError extends Error {
 function rowsOf(data) {
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.data)) return data.data;
+  if (data && Array.isArray(data.results)) return data.results;
   if (data && typeof data === 'object') return [data];
   return [];
 }
@@ -248,7 +249,10 @@ export class BexioClient {
     return items;
   }
 
-  /** API 4.0 banking lists: 0-based `page` + `per-page`. De-duplicates defensively. */
+  /**
+   * API 4.0 banking lists: `page` + `per-page`, answered as
+   * `{ query, sort-by, pagination: { page, per-page, max-results }, results }`. De-duplicates defensively.
+   */
   async listPerPage(path, query = {}, { perPage = this.pageSize, allow = [], onPage } = {}) {
     const items = [];
     const seen = new Set();
@@ -265,6 +269,8 @@ export class BexioClient {
         fresh++;
       }
       onPage?.(items.length);
+      const maxResults = Number(data?.pagination?.['max-results']);
+      if (Number.isFinite(maxResults) && items.length >= maxResults) break;
       if (rows.length === 0 || fresh === 0 || rows.length < perPage) break;
     }
     return items;

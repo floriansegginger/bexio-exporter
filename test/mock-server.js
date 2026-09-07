@@ -124,7 +124,12 @@ export function startMockServer({ token = 'test-token' } = {}) {
       const perPage = Number(url.searchParams.get('per-page') ?? 500);
       const bankPage = Number(url.searchParams.get('page') ?? 0);
       const rows = [{ id: 100, amount: 10 }, { id: 101, amount: 20 }];
-      return json(res, 200, bankPage === 0 ? rows.slice(0, perPage) : []);
+      return json(res, 200, {
+        query: null,
+        'sort-by': null,
+        pagination: { page: bankPage + 1, 'per-page': perPage, 'max-results': rows.length },
+        results: bankPage === 0 ? rows.slice(0, perPage) : [],
+      });
     }
 
     if (p === '/3.0/accounting/manual_entries') return json(res, 200, slice(manualEntries));

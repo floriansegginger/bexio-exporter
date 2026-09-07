@@ -88,7 +88,9 @@ test('full export against a mock bexio API, then resume', async (t) => {
   assert.equal((await readJson('accounting/manual_entry_lines.json')).length, 3);
 
   // banking: page/per-page
-  assert.equal((await readJson('banking/payments.json')).length, 2);
+  const bankPayments = await readJson('banking/payments.json');
+  assert.deepEqual(bankPayments.map((p) => p.id), [100, 101]);
+  assert.equal(server.hits.get('/4.0/banking/payments'), 1, 'max-results must stop pagination');
 
   // payroll not available -> handled, not an error
   assert.equal(manifest.sections.find((s) => s.name === 'payroll').status, 'ok');
